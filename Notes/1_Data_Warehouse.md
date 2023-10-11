@@ -49,15 +49,21 @@ IOT swarm is when many devices sends data messages to a central collection syste
  - Improved decision making as it provides timely and relevant information to support decision-making processes. Access to historical and real-time data along with advanced analytics help make data-driven decisions.
  - Improved operational efficiency as it provides a centralized repository to retrieve data quickly
  - Enhanced data quality due to cleaning, transformation, and validation which ensures data accuracy and consistency (single version of the truth is the data warehousing ideal of having either a single centralised database which stores all of an organisation's data in a consistent and non-redundant form)
-- Security as it provides security and access controls
-- To Gain Competitive Advantage: A data warehouse provides insights into customer behaviour, market trends, and competitor activities, providing a competitive advantage.
+- Robust security as it provides access controls/privileges/user authentication, encryption of sensitive data, data masking and redaction, compliance with data protection regulations
+- Gaining a Competitive Advantage: A data warehouse provides insights into customer behaviour, market trends, and competitor activities, providing a competitive advantage.
 
 
-
- A Data mart is a subset of a data warehouse that is designed to serve the specific needs of a particular group of users or a specific business function within an organization
+A Data mart is a subset of a data warehouse that is designed to serve the specific needs of a particular group of users or a specific business function within an organization
 
 - Created to support analytical and reporting needs of a specific department, business unit
 - Contain limited set of data that is relevant to the business need which is often aggregated, transformed, and optimised
 - Schema for the type of queries required by the specific user group and differs from the schema used in the data warehouse
 - Store aggregated and summarised data and optimised for query performance so its fast for retrieving
 - Users of data marts use BI tools, reporting tools and analytics platforms
+
+Technology - to maintain data warehouses
+- Amazon redshift
+- Teradata
+- Oracle
+- Panoply
+- Cloudera
