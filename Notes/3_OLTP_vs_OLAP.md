@@ -15,10 +15,17 @@ Most companies use OLTP and OLAP systems together to meet their business intelli
 - Heavy write, low read (high updating, inserting, deleting data, low querying of data)
 - Examples: ATM transactions, POS systems, Online shopping carts, Online banking
 
+## ACID Principles
+In the context of databases and data storage systems, a transaction is any operation that is treated as a single unit of work, which either completes fully or does not complete at all, and leaves the storage system in a consistent state
+
+- **A**tomicity - Each statement in a transaction (read, write, update, delete) is treated as a single unit. Either the entire statement is executed, or none of it is executed. This prevents data loss/corruption if streaming data source fails mid-stream for instance.
+- **C**onsistency - Transactions only make changes to tables in predefined, predictable ways. Each transaction must result in a valid database state (primary and foreign key relations remain intact). Transactional consistency ensures errors in data do not affect integrity
+ - **I**solation - Concurrent read or write executions should produce the same result as sequential executions
+ - **D**urability - Ensures that changes to your data made by successfully executed transactions will be saved, even in the event of system failure (non-volatile memory)
 
 
 
-## OLAP - Online analytical processing
+## OLAP - Online Analytical Processing
 
 - OLAP is a category of data processing that is focused on analysing and querying large volumes of historical and aggregated data to support decision-making and business intelligence.
 - Used for performing multi-dimensional analysis at high speeds on large volumes of data
@@ -44,7 +51,7 @@ Most companies use OLTP and OLAP systems together to meet their business intelli
 - OLAP systems include SnowflakeDB, Amazon Redshift, Google BigQuery, Apache Hive, Synapse Analytics (Azure)
 
 
-## Use case
+## Use Case
 Retail company that operates hundreds of stores across the country and uses a huge database to track sales, inventory, customer data.
 
 Use OLTP to process transactions in real-time such as updating inventory and managing customer account. Each store connects to central database which updates inventory in real-time as products sold. Use OLTP to manage customer accounts—for example, to track loyalty points, manage payment information, and process returns
