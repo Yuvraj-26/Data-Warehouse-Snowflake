@@ -56,7 +56,11 @@ New dimensions or facts can be added without affecting the existing structure.
     - Formulate the fact table (fact_order_products) by joining necessary tables to consolidate the key metrics and dimensions
 5. Analytics and Insights
     - Create SQL queries to extract actionable insights from the data
+6. SnowflakeDB Slowly Changing Dimensions (SCD)
+    - Apply each type of SCD to the data using create and insert statements to generate table-like structures
 
+
+# Data Modelling
 
 ## DataSet Tables Overview
 
@@ -314,3 +318,157 @@ ORDER BY
 
 #### Query: Average number of products added to the cart per order by day of the week
 <img src="Docs/query2.png">
+
+# Slowly Changing dimensions (SCD)
+
+A slowly changing dimension (SCD) is a dimension that is able to handle data attributes which change over time.  It is considered and implemented as one of the most critical ETL tasks in tracking the history of dimension records.
+
+For example: A customer dimension may hold attributes such as name, address, and phone number. Over time, a customer's details may change (e.g. move addresses, change phone number, etc).
+
+To handle slowly changing dimensions in the real world: Be proactive by asking about potential changes, involve business + technical users, develop a strategy for each changing attribute
+
+#### SCD Type 0: Retain Original
+Refers to dimensions or attributes that never change and will not be updated in the data warehouse. Type 0 is applicable to most date dimension attributes and include Date of birth, Employee start date, and Social security Number
+#### SCD Type 1: Overwrite
+Refers to an instance where old data is overwritten with new data using update query. The old data is lost as it is not stored anywhere, and the latest snapshot of a record is maintained in the data warehouse without any historical records. The new queries will always return the most recent value. This SCD type requires less storage space but cannot keep track of changes over time, which may be required for analysis. Examples include Customer address data changes, Inventory data, Employee salary data
+#### SCD Type 2: Add New Row
+Known as the historical tracking method, maintains a complete history of change in a dimension table. Every time there is a change in the source system, a new row is added to the dimensions table with a unique identifier. The resulting table will retain the prior history, allowing full history tracking. There are several ways to handle SCD Type 2 dimensions:
+
+- Using a Flag - Adding a flag column signifying the record that is currently active. The flag column uses a simple boolean flag (such as 0/1 or Y/N) to denote whether a specific record is currently active or a valid version. Example: Customer moves city. For the customerID we will have multiple records for different cities, and require a surrogate key to uniquely identify these rows. Every time there is a change, add a new row and update the isActive column of the previous rows to False. This way, querying the active values is possible by filtering on isActive=Tue criteria
+
+- Using Version Numbers - Using version numbers allows keeping track of changes. The row with the highest version is the most current value. Add a new column named Version, and assign 0 for the city. For a change of address, add a new row with the version number 1 assigned. Filter on the MAX(Version) to get the most latest values
+
+- Using date ranges - Adding one or two timestamp columns to signify when a new record was created or made active and when it was made inactive. Add two columns for startDate and endDate for the date range the row is active. Query on NULL for the endDate which signifies the latest record
+
+- A variation to the date-range approach; combine the flag column to easily identify active or current records
+
+Using SCD Type 2 means no data is lost as the history of a record is maintained but can be complex to implemented and requires more storage space. Adding records will increase table size and requires maintenance. Examples include Sales data: tracking item price or profit over time, customer or order data: tracking previous orders for recommendations of new items, customer address: adding new address entry with date range columns
+#### SCD Type 3: Add New Attribute
+Maintain only the partial history and not a complete history. Instead of adding a new row for every change, a new column is added to track the previous value. The SCD Type 3 stores two versions of values for the selected level attributes. Each record will store the current and previous values of the selected attribute. You can only track one change in a record rather than multiple changes over time. This method is not scalable if you want to preserve complete history. Can also add date columns to track modified dates but do not require surrogate keys as the identification key of a record does not change. For changing a customer city, add a new column called PrevCity, every time the city changes, add the previous value and update the City column as required. Benefit is fast queries due to limited history and less storage requirements. Examples include Product pricing or Financial reporting, where only previous and current values are important.
+#### SCD Type 4: Add History Table
+Introduced for dimension attributes that change relatively frequently. This SCD involves maintaining the records in two different tables - a current record table and a historical record table. While the main dimension table stays current, the history table stores past data. Also can split the fast changing attributes of the descension table into another smaller dimension table and reference the new dimension table directly from the fact table. With SCD Type 4, a record will be added to the history table for each change in the source system. Example: Product price changes - store frequently changing product prices in a smaller table to update, monthly carpool pass - store lastPurchased and validity data for the pass in a smaller table to update monthly.
+#### SCD Type 6: Combined Approach
+The SCD Type 6 is a hybrid approach of Type 1, Type 2, and Type 3 (1 + 2 + 3 = 6). This includes columns for both historical and current data and a column to track the current version of the record. A long with the addition of new rows, we update the latest value in all the rows, with the current version being easily accessible. This SCD type is useful when a business wants to view both current and historical data.
+
+## SCD Implementation
+
+Implementation of the concept of Slowly Changing Dimension (SCD) in SnowflakeDB and its types - SCD 1, SCD 2, SCD 3, and SCD 6 with examples using a customer table.
+
+### Customer Table Creation
+
+Create a customer table with basic columns and dummy data:
+
+```sql
+CREATE TABLE customer (
+   customer_id INT,
+   customer_name VARCHAR(50),
+   customer_email VARCHAR(50),
+   customer_phone VARCHAR(15),
+   load_date DATE,
+   customer_address VARCHAR(255)
+);
+
+INSERT INTO customer VALUES
+   (1, 'John Doe', 'john.doe@example.com', '123-456-7890', '2022-01-01', '123 Main St'),
+   (2, 'Jane Doe', 'jane.doe@example.com', '987-654-3210', '2022-01-01', '456 Elm St'),
+   (3, 'Bob Smith', 'bob.smith@example.com', '555-555-5555', '2022-01-01', '789 Oak St');
+```
+
+Initial customer table:
+
+| customer_id | customer_name | customer_email         | customer_phone | load_date      | CUSTOMER_ADDRESS |
+|-------------|---------------|------------------------|----------------|----------------|------------------|
+| 1           | John Doe      | john.doe@example.com   | 123-456-7890   | January 1, 2022 | 123 Main St      |
+| 2           | Jane Doe      | jane.doe@example.com   | 987-654-3210   | January 1, 2022 | 456 Elm St       |
+| 3           | Bob Smith     | bob.smith@example.com  | 555-555-5555   | January 1, 2022 | 789 Oak St       |
+
+
+### SCD Type 1
+The original data is simply overwritten with the new information
+
+```sql
+-- SCD Type 1
+-- Update customer address for customer_id=2
+UPDATE customer SET customer_address = '789 Maple St' WHERE customer_id = 2;
+
+SELECT * FROM customer;
+```
+
+Updated customer table:
+| customer_id | customer_name | customer_email         | customer_phone | load_date      | CUSTOMER_ADDRESS |
+|-------------|---------------|------------------------|----------------|----------------|------------------|
+| 1           | John Doe      | john.doe@example.com   | 123-456-7890   | January 1, 2022 | 123 Main St      |
+| 2           | Jane Doe      | jane.doe@example.com   | 987-654-3210   | January 1, 2022 | **789 Mape St**       |
+| 3           | Bob Smith     | bob.smith@example.com  | 555-555-5555   | January 1, 2022 | 789 Oak St       |
+
+
+### SCD Type 2
+instead of overwriting the original data, new records are created to store the historical changes. Each record contains a timestamp or version number, allowing you to track the complete history of changes. SCD Type 2 creates a new record for each change in the data, with a new surrogate key and load date. The old record remains in the table with an end date equal to the start date of the new record
+
+```sql
+-- SCD Type 2
+-- Add columns for customer segment, start date, end date, and version
+ALTER TABLE customer ADD COLUMN customer_segment VARCHAR(20);
+ALTER TABLE customer ADD COLUMN start_date DATE;
+ALTER TABLE customer ADD COLUMN end_date DATE;
+ALTER TABLE customer ADD COLUMN version BIGINT DEFAULT 1;
+SELECT * FROM customer;
+
+-- Update customer segment for customer_id=2
+-- enter dummy date for end date for future date
+UPDATE customer SET customer_segment = 'Gold', start_date = '2022-02-01', end_date = '9999-12-31' WHERE customer_id = 2;
+SELECT * FROM customer
+
+-- Goal is to update customer segment from Gold to Platinum whilst maintaining complete historical changes.
+-- Insert new record for customer_id=2 with Platinum customer segment
+INSERT INTO customer (customer_id, customer_name, customer_email, customer_phone, customer_address, customer_segment, start_date, end_date, version, load_date)
+   SELECT customer_id, customer_name, customer_email, customer_phone, customer_address, 'Platinum', '2022-03-01', '9999-12-31', version + 1, '2022-03-01' FROM customer WHERE customer_id = 2;
+
+SELECT * FROM customer where customer_id = 2;
+```
+This returns 2 records for customer_id = 2, one with Gold segment and one with Platinum segment. The version numbers show the latest record:
+
+| CUSTOMER_ID | CUSTOMER_NAME | CUSTOMER_EMAIL        | CUSTOMER_PHONE | LOAD_DATE   | CUSTOMER_ADDRESS | CUSTOMER_SEGMENT | START_DATE  | END_DATE    | VERSION |
+|-------------|---------------|------------------------|----------------|-------------|------------------|------------------|-------------|-------------|---------|
+| 2           | Jane Doe      | jane.doe@example.com   | 987-654-3210   | 2022-01-01  | 789 Maple St     | Gold             | 2022-02-01  | 9999-12-31  | 1       |
+| 2           | Jane Doe      | jane.doe@example.com   | 987-654-3210   | 2022-03-01  | 789 Maple St     | Platinum         | 2022-03-01  | 9999-12-31  | 2       |
+
+
+
+Full updated customer table:
+| customer_id | customer_name | customer_email         | customer_phone | load_date      | customer_address | customer_segment | start_date     | end_date       | version |
+|-------------|---------------|------------------------|----------------|----------------|------------------|------------------|----------------|----------------|---------|
+| 1           | John Doe      | john.doe@example.com   | 123-456-7890   | January 1, 2022 | 123 Main St      | NULL             | NULL           | NULL           | 1       |
+| 2           | Jane Doe      | jane.doe@example.com   | 987-654-3210   | February 1, 2022 | 789 Maple St    | Gold             | February 1, 2022 | March 1, 2022 | 1       |
+| 2           | Jane Doe      | jane.doe@example.com   | 987-654-3210   | March 1, 2022 | 789 Maple St      | Platinum         | March 1, 2022 | 9999-12-31     | 2       |
+| 3           | Bob Smith     | bob.smith@example.com  | 555-555-5555   | January 1, 2022 | 789 Oak St       | NULL             | NULL           | NULL           | 1       |
+
+### SCD Type 3
+SCD Type 3 keeps the current and previous values in the same record, with separate columns for each value
+
+```sql
+-- SCD Type 3
+-- A new column is added to track the previous value. Store two versions of values for the selected level attributes. Each record will store the current and previous values
+ALTER TABLE customer ADD COLUMN customer_status VARCHAR(10);
+ALTER TABLE customer ADD COLUMN prev_customer_status VARCHAR(10);
+
+-- ALTER TABLE customer ADD COLUMN prev_segment VARCHAR(255);
+
+-- SELECT customer_id, customer_name, customer_email, customer_phone, customer_address, 'Silver', '2022-03-01', '9999-12-31', version + 1, '2022-03-01', customer_segment FROM customer WHERE customer_id = 2 and version = 2;
+
+-- Update customer status for customer_id=2
+UPDATE customer SET customer_status = 'Active', prev_customer_status = 'Inactive' WHERE customer_id = 2;
+
+SELECT * FROM customer;
+```
+Updated customer table:
+
+| customer_id | customer_name | customer_email        | customer_phone | load_date         | customer_address | customer_segment | start_date      | end_date        | version | customer_status | prev_customer_status |
+|-------------|---------------|------------------------|----------------|-------------------|------------------|------------------|-----------------|-----------------|---------|-----------------|----------------------|
+| 1           | John Doe      | john.doe@example.com   | 123-456-7890   | January 1, 2022  | 123 Main St      | NULL             | NULL            | NULL            | 1       | NULL            | NULL                 |
+| 2           | Jane Doe      | jane.doe@example.com   | 987-654-3210   | March 1, 2022    | 789 Maple St     | Platinum         | March 1, 2022  | 9999-12-31      | 2       | Active          | Inactive             |
+| 3           | Bob Smith     | bob.smith@example.com  | 555-555-5555   | January 1, 2022  | 789 Oak St       | NULL             | NULL            | NULL            | 1       | NULL            | NULL                 |
+
+
+### SCD Type 6
+SCD Type 6 is a combination of SCD Type 1 and Type 2. It updates the current record with new data and creates a new record for each change in the data with a new surrogate key and load date. This allows for efficient storage while preserving historical information.
